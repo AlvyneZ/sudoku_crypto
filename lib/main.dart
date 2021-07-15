@@ -43,7 +43,6 @@ class LogInPage extends StatefulWidget {
 }
 
 class _LogInPageState extends State<LogInPage> {
-
   final _formKey = GlobalKey<FormState>();
   String playerName = "";
 
@@ -52,53 +51,51 @@ class _LogInPageState extends State<LogInPage> {
     return Scaffold(
       appBar: AppBar(title: Text("Sudoku Crypto Log In")),
       body: Form(
-        key: _formKey,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text("User Name"),
-              SizedBox(height: 20),
-              TextFormField(
-                validator: (String? value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter some text';
-                  }
-                  playerName = value;
-                  return null;
-                },
-              ),
-              SizedBox(height: 20),
-              ElevatedButton(
-                  onPressed: () async {
-                    if (_formKey.currentState!.validate()) {
-                      // If the form is valid, display a snackbar. In the real world,
-                      // you'd often call a server or save the information in a database.
-                      Player? user = await appEngine.database.getPlayer(playerName);
-                      if (user == null) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(
-                            SnackBar(content: Text("User does not exist, Please input a correct user name.")));
-                        return;
-                      }
-                      appEngine.myName = playerName;
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => MyHomePage(title: 'Sudoku Crypto')),
-                      );
+          key: _formKey,
+          child: Center(
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                Text("User Name"),
+                SizedBox(height: 20),
+                TextFormField(
+                  validator: (String? value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter some text';
                     }
+                    playerName = value;
+                    return null;
                   },
-                  child: Text("Log in")
-              )
-            ]
-          )
-        )
-      ),
+                ),
+                SizedBox(height: 20),
+                ElevatedButton(
+                    onPressed: () async {
+                      if (_formKey.currentState!.validate()) {
+                        // If the form is valid, display a snackbar. In the real world,
+                        // you'd often call a server or save the information in a database.
+                        Player? user =
+                            await appEngine.database.getPlayer(playerName);
+                        if (user == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(
+                                  "User does not exist, Please input a correct user name.")));
+                          return;
+                        }
+                        appEngine.myName = playerName;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  MyHomePage(title: 'Sudoku Crypto')),
+                        );
+                      }
+                    },
+                    child: Text("Log in"))
+              ]))),
     );
   }
 }
-
 
 class MyHomePage extends StatefulWidget {
   MyHomePage({Key? key, required this.title}) : super(key: key);
@@ -148,8 +145,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    number_side = (MediaQuery.of(context).orientation == Orientation.portrait)?
-        MediaQuery.of(context).size.width/12: MediaQuery.of(context).size.height/15;
+    number_side = (MediaQuery.of(context).orientation == Orientation.portrait)
+        ? MediaQuery.of(context).size.width / 12
+        : MediaQuery.of(context).size.height / 15;
     // This method is rerun every time setState is called, for instance as done
     // by the _incrementCounter method above.
     //
@@ -190,13 +188,12 @@ class _MyHomePageState extends State<MyHomePage> {
             // Text(
             //    'CONGRATULATIONS  if it is a one ,Otherwise use higher intution  '),
             Text((appEngine.currentSudoku.checkSudokuCorrectness())
-                    ? "CONGRATULATIONS YOU HAVE HIGHER INTUITION"
-                    : "YOU ARE WRONG"
-                ),
+                ? "CONGRATULATIONS YOU HAVE HIGHER INTUITION"
+                : "YOU ARE WRONG"),
             SizedBox(height: 5),
             Container(
-                height: number_side*9,
-                width: number_side*9,
+                height: number_side * 9,
+                width: number_side * 9,
                 child: StreamBuilder<int>(
                     stream: appEngine.sudokuBLoC.curSudoku,
                     builder: (context, AsyncSnapshot<int> snapshot) {
@@ -347,9 +344,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               ])
                         ]),
                       ]);
-                    }
-                )
-            ),
+                    })),
             SizedBox(height: 5),
             Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
               Container(
@@ -357,7 +352,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 width: number_side * 1.1,
                 child: ElevatedButton(
                     style: ButtonStyle(
-                        padding: MaterialStateProperty.all(EdgeInsets.zero),
+                      padding: MaterialStateProperty.all(EdgeInsets.zero),
                     ),
                     onPressed: () {
                       appEngine.setNumber(1);
@@ -460,13 +455,28 @@ class _MyHomePageState extends State<MyHomePage> {
                     },
                     child: Text("9")),
               ),
+              Container(
+                height: number_side * 1.1,
+                width: number_side * 1.1,
+                child: ElevatedButton(
+                    style: ButtonStyle(
+                      padding: MaterialStateProperty.all(EdgeInsets.zero),
+                    ),
+                    onPressed: () {
+                      appEngine.setNumber(0);
+                    },
+                    child: Text("Undo")),
+              ),
             ])
           ],
         ),
       ),
 
       floatingActionButton: FloatingActionButton(
-          onPressed: (){appEngine.check_SudokuCorrectness();setState((){});},
+          onPressed: () {
+            appEngine.check_SudokuCorrectness();
+            setState(() {});
+          },
           tooltip: 'Increment',
           child: Icon(Icons
               .check_circle)), // This trailing comma makes auto-formatting nicer for build methods.
@@ -500,8 +510,7 @@ class Number extends StatelessWidget {
                     padding: MaterialStateProperty.all(EdgeInsets.zero),
                     backgroundColor: (appEngine.selectedNumberID == numberID)
                         ? MaterialStateProperty.all(Colors.blue[800])
-                        : MaterialStateProperty.all(Colors.blue)
-                ),
+                        : MaterialStateProperty.all(Colors.blue)),
                 onPressed: () {
                   appEngine.selectedNumberID = numberID;
                   print("Number $numberID has been selected");
@@ -530,8 +539,8 @@ class Box extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-        height: number_side*3,
-        width: number_side*3,
+        height: number_side * 3,
+        width: number_side * 3,
         child: Table(border: TableBorder.all(), children: [
           TableRow(children: [
             Number(
