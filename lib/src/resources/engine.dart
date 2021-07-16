@@ -47,7 +47,7 @@ class AppEngine {
   DatabaseStateBLoC databaseStateBLoC = DatabaseStateBLoC();
   //To communicate with the server
   //TODO: Make the communications class with all the required function members
-  packetHandler comms = packetHandler();
+  PacketHandler comms = PacketHandler(destIpString: "192.168.4.1", portNumber: 50000);
   void onData(RawSocketEvent event) async {
     // and event handler for when a packet is received
     print("socket event");
@@ -58,27 +58,30 @@ class AppEngine {
         if (rcv.data[i] < 127) data.add(rcv.data[i]);
       }
       print("Received data: " + ascii.decode(data));
-      packet_splitter pcktreceived = packet_splitter(ascii.decode(data));
-      if (pcktreceived.type == "0") {
+      PacketSplitter pcktReceived = PacketSplitter(ascii.decode(data));
+      if (pcktReceived.type == "0") {
         //the MCU is updating the sudoku
         //TODO CONFIRM SUDOKUS ARE THE SAME ; ACCESS A STRING REPRESENTATIOON OF THE SUDOKU
-        //RECEIVED USING COMMAND pcktreceived.sudoku;
-        problemSudoku = Sudoku(
-            sudokuID: pcktreceived.sudoku.hashCode,
-            grid: pcktreceived.sudokuTable
-        );
-        currentSudoku = Sudoku(
-            sudokuID: pcktreceived.sudoku.hashCode,
-            grid: pcktreceived.sudokuTable
-        );
+        //RECEIVED USING COMMAND pcktReceived.sudoku;
+        if (problemSudoku.sudokuID != pcktReceived.sudoku.hashCode) {
+          problemSudoku = Sudoku(
+              sudokuID: pcktReceived.sudoku.hashCode,
+              grid: pcktReceived.sudokuTable
+          );
+          currentSudoku = Sudoku(
+              sudokuID: pcktReceived.sudoku.hashCode,
+              grid: pcktReceived.sudokuTable
+          );
+        }
       }
-      else if (pcktreceived.type == "2") {
+      else if (pcktReceived.type == "2") {
         //someone has completed the sudoku and won
         //TODO Update the database
-        //access the person who solved with pcktreceived.solver the old sudoku id is pckreceive.id
+        //access the person who solved with pcktReceived.solver the old sudoku id is pckreceive.id
         await database.updateDatabase(
-            pcktreceived.sudoku.hashCode, pcktreceived.solver
+            pcktReceived.sudoku.hashCode, pcktReceived.solver
         );
+        databaseStateBLoC.newDatabaseEntry();
 
         List<Player> players = await database.players();
         print ("Player's database: " + players.toString());
@@ -86,12 +89,12 @@ class AppEngine {
         List<Log> logs = await database.logs();
         print ("Log's database: " + logs.toString());
       }
-      else if (pcktreceived.type == "3") {
+      else if (pcktReceived.type == "3") {
         this.problemSudoku = Sudoku(
-            sudokuID: pcktreceived.sudoku.hashCode, grid: pcktreceived.sudokuTable
+            sudokuID: pcktReceived.sudoku.hashCode, grid: pcktReceived.sudokuTable
         );
         this.currentSudoku = Sudoku(
-            sudokuID: pcktreceived.sudoku.hashCode, grid: pcktreceived.sudokuTable
+            sudokuID: pcktReceived.sudoku.hashCode, grid: pcktReceived.sudokuTable
         );
       }
     }
@@ -115,7 +118,7 @@ class AppEngine {
   }
 
   void initializeAppEngine () async {
-    await comms.initializeIp(50000);
+    await comms.initializeIp();
     comms.socketConnection.listen(onData);
     await database.initializeDatabase();
   }

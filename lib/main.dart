@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sudoku_crypto/src/blocs/current_sudoku.dart';
+import 'package:sudoku_crypto/src/blocs/database_state.dart';
 import 'package:sudoku_crypto/src/models/database.dart';
 import 'package:sudoku_crypto/src/resources/engine.dart';
 
@@ -52,47 +53,50 @@ class _LogInPageState extends State<LogInPage> {
       appBar: AppBar(title: Text("Sudoku Crypto Log In")),
       body: Form(
           key: _formKey,
-          child: Center(
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                Text("User Name"),
-                SizedBox(height: 20),
-                TextFormField(
-                  validator: (String? value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter some text';
-                    }
-                    playerName = value;
-                    return null;
-                  },
-                ),
-                SizedBox(height: 20),
-                ElevatedButton(
-                    onPressed: () async {
-                      if (_formKey.currentState!.validate()) {
-                        // If the form is valid, display a snackbar. In the real world,
-                        // you'd often call a server or save the information in a database.
-                        Player? user =
-                            await appEngine.database.getPlayer(playerName);
-                        if (user == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text(
-                                  "User does not exist, Please input a correct user name.")));
-                          return;
-                        }
-                        appEngine.myName = playerName;
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) =>
-                                  MyHomePage(title: 'Sudoku Crypto')),
-                        );
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 20.0),
+            child: Center(
+                child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                  Text("User Name"),
+                  SizedBox(height: 20),
+                  TextFormField(
+                    validator: (String? value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter some text';
                       }
+                      playerName = value;
+                      return null;
                     },
-                    child: Text("Log in"))
-              ]))),
+                  ),
+                  SizedBox(height: 20),
+                  ElevatedButton(
+                      onPressed: () async {
+                        if (_formKey.currentState!.validate()) {
+                          // If the form is valid, display a snackbar. In the real world,
+                          // you'd often call a server or save the information in a database.
+                          Player? user =
+                              await appEngine.database.getPlayer(playerName);
+                          if (user == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text(
+                                    "User does not exist, Please input a correct user name.")));
+                            return;
+                          }
+                          appEngine.myName = playerName;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    MyHomePage(title: 'Sudoku Crypto')),
+                          );
+                        }
+                      },
+                      child: Text("Log in"))
+                ])),
+          )),
     );
   }
 }
@@ -121,12 +125,14 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     appEngine.sudokuBLoC = SudokuBLoC();
+    appEngine.databaseStateBLoC = DatabaseStateBLoC();
     super.initState();
   }
 
   @override
   void dispose() {
     appEngine.sudokuBLoC.dispose();
+    appEngine.databaseStateBLoC.dispose();
     super.dispose();
   }
 
@@ -159,10 +165,66 @@ class _MyHomePageState extends State<MyHomePage> {
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
+        leading:  IconButton(
+            icon: Icon(Icons.arrow_back_ios),
+            onPressed: () {Navigator.pop(context);}
+        ),
         actions: [
-          ElevatedButton(onPressed: () {}, child: Text("Check Coins")),
-          SizedBox(width: 50)
+          Builder(
+            builder: (context) => IconButton(
+              tooltip: "Check Coins",
+              icon: Icon(Icons.account_balance_wallet),
+              onPressed: () {Scaffold.of(context).openEndDrawer();}
+            ),
+          ),
         ],
+      ),
+
+      endDrawer: Drawer(
+        child: Container(
+          child: FutureBuilder(
+            future: appEngine.database.players(),
+            builder: (BuildContext context, AsyncSnapshot< List<Player> > players){
+              if (players.connectionState != ConnectionState.done){
+                return Center(child:CircularProgressIndicator());
+              }
+              else if (players.data == null){
+                return Center(child:Text("Nothing to show here."));
+              }
+              else{
+                return ListView.builder(
+                    itemCount: players.data!.length,
+                    itemBuilder: (BuildContext context, int index){
+                      if (index == 0) {
+                        return Column(
+                          children: [
+                            ListTile(
+                              title: Text("Player Name"),
+                              subtitle: Text("\tMoney"),
+                              tileColor: Colors.blueAccent,
+                            ),
+                            Divider(color: Colors.black),
+                            ListTile(
+                              title: Text("${players.data![index].playerName}"),
+                              subtitle: Text("\t${players.data![index].money}"),
+                              tileColor: (appEngine.myName == players.data![index].playerName) ?
+                                Colors.lightBlueAccent : Colors.transparent,
+                            ),
+                          ],
+                        );
+                      }
+                      return ListTile(
+                        title: Text("${players.data![index].playerName}"),
+                        subtitle: Text("\t${players.data![index].money}"),
+                        tileColor: (appEngine.myName == players.data![index].playerName) ?
+                          Colors.lightBlueAccent : ((index % 2) == 1)?Colors.grey[300]:Colors.transparent,
+                      );
+                    }
+                );
+              }
+            },
+          )
+        )
       ),
 
       body: Center(
@@ -465,7 +527,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     onPressed: () {
                       appEngine.setNumber(0);
                     },
-                    child: Text("Undo")),
+                    child: Icon(Icons.undo_rounded)),
               ),
             ])
           ],

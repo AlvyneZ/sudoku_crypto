@@ -1,50 +1,46 @@
-//This is a demo code to show sending of data and it's reception using UDP
-// ****This code is not meant to be run using flutter
-// ****To run the code open a terminal and call:
-//        dart communications.dart
-
 import 'dart:async';
 import 'dart:convert';
 
 import 'dart:io';
 
 void main() async {
-  packetHandler test = packetHandler();
+  //This is a demo code to show sending of data and it's reception using UDP
+  // ****This code is not meant to be run using flutter
+  // ****To run the code open a terminal and call:
+  //        dart communications.dart
+  PacketHandler test = PacketHandler(destIpString: "192.168.43.235", portNumber: 50000);
   //String totest = "1123456432345543";
   //packet_splitter test1 = packet_splitter(totest);
-  await test.initializeIp(50000);
+  await test.initializeIp();
   await Future.delayed(Duration(seconds: 1));
   while (true) {
     test.sendData("");
   }
 }
 
-class packetHandler {
-  int portNumber = 50000;
-  String? destIpString;
+class PacketHandler {
+  int portNumber;
+  String destIpString;
   late RawDatagramSocket
       socketConnection; //the socket connection that will be carrying out the udp message sending
 
-  packetHandler();
+  PacketHandler({required String this.destIpString, required int this.portNumber});
 
-  Future<void> initializeIp(int number) async {
+  Future<void> initializeIp() async {
     this.socketConnection =
-        await RawDatagramSocket.bind(InternetAddress.anyIPv4, number);
+        await RawDatagramSocket.bind(InternetAddress.anyIPv4, this.portNumber);
     print('got here $this.socketConnection');
-    this.portNumber = number;
     print("The socket is connected to: ${socketConnection.address}:" +
         this.socketConnection.port.toString());
     List<NetworkInterface> ni = await NetworkInterface.list();
     print("The internet address is: ${ni[0].addresses[0].address}");
 
-    this.destIpString = "192.168.43.235";
-    print(
-        "The IP address the socket will connect to is ${this.destIpString}:${this.portNumber}");
+    print("The IP address the socket will connect to is ${this.destIpString}:${this.portNumber}");
   }
 
   void sendData(String stringToSend) {
     List<int> buffer = ascii.encode(stringToSend);
-    InternetAddress destAddress = InternetAddress(this.destIpString!);
+    InternetAddress destAddress = InternetAddress(this.destIpString);
     socketConnection.send(buffer, destAddress, this.portNumber);
     print("The string '$stringToSend' has been sent.");
     //We need a delay to allow the main thread with input to hand over control of the terminal
@@ -53,12 +49,12 @@ class packetHandler {
   }
 }
 
-class packet_splitter {
+class PacketSplitter {
   String? type;
   String sudoku = "";
   List<List<int>> sudokuTable = [];
   String solver = "";
-  packet_splitter(String packet) {
+  PacketSplitter(String packet) {
     assert(packet.length > 81);
     type = packet.substring(0, 1);
     if (type == "0") {
