@@ -67,6 +67,9 @@ class _LogInPageState extends State<LogInPage> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter some text';
                       }
+                      if (value == "::Missed::"){
+                        return 'Invalid name. Please enter a valid name.';
+                      }
                       playerName = value;
                       return null;
                     },
@@ -182,47 +185,54 @@ class _MyHomePageState extends State<MyHomePage> {
 
       endDrawer: Drawer(
         child: Container(
-          child: FutureBuilder(
-            future: appEngine.database.players(),
-            builder: (BuildContext context, AsyncSnapshot< List<Player> > players){
-              if (players.connectionState != ConnectionState.done){
-                return Center(child:CircularProgressIndicator());
-              }
-              else if (players.data == null){
-                return Center(child:Text("Nothing to show here."));
-              }
-              else{
-                return ListView.builder(
-                    itemCount: players.data!.length,
-                    itemBuilder: (BuildContext context, int index){
-                      if (index == 0) {
-                        return Column(
-                          children: [
-                            ListTile(
-                              title: Text("Player Name"),
-                              subtitle: Text("\tMoney"),
-                              tileColor: Colors.blueAccent,
-                            ),
-                            Divider(color: Colors.black),
-                            ListTile(
-                              title: Text("${players.data![index].playerName}"),
-                              subtitle: Text("\t${players.data![index].money}"),
-                              tileColor: (appEngine.myName == players.data![index].playerName) ?
-                                Colors.lightBlueAccent : Colors.transparent,
-                            ),
-                          ],
-                        );
-                      }
-                      return ListTile(
-                        title: Text("${players.data![index].playerName}"),
-                        subtitle: Text("\t${players.data![index].money}"),
-                        tileColor: (appEngine.myName == players.data![index].playerName) ?
-                          Colors.lightBlueAccent : ((index % 2) == 1)?Colors.grey[300]:Colors.transparent,
-                      );
-                    }
-                );
-              }
-            },
+          child: StreamBuilder<int>(
+            stream: appEngine.databaseStateBLoC.outDatabase,
+            builder: (BuildContext context, AsyncSnapshot<int> snapshot) {
+              return FutureBuilder(
+                future: appEngine.database.players(),
+                builder: (BuildContext context, AsyncSnapshot< List<Player> > playersSnapshot){
+                  if (playersSnapshot.connectionState != ConnectionState.done){
+                    return Center(child:CircularProgressIndicator());
+                  }
+                  else if (playersSnapshot.data == null){
+                    return Center(child:Text("Nothing to show here."));
+                  }
+                  else{
+                    List<Player> players = playersSnapshot.data!;
+                    players.sort((Player one, Player two) => two.money.compareTo(one.money));
+                    return ListView.builder(
+                        itemCount: players.length,
+                        itemBuilder: (BuildContext context, int index){
+                          if (index == 0) {
+                            return Column(
+                              children: [
+                                ListTile(
+                                  title: Text("Player Name"),
+                                  subtitle: Text("\tMoney"),
+                                  tileColor: Colors.blueAccent,
+                                ),
+                                Divider(color: Colors.black),
+                                ListTile(
+                                  title: Text("${players[index].playerName}"),
+                                  subtitle: Text("\t${players[index].money}"),
+                                  tileColor: (appEngine.myName == players[index].playerName) ?
+                                    Colors.lightBlueAccent : Colors.transparent,
+                                ),
+                              ],
+                            );
+                          }
+                          return ListTile(
+                            title: Text("${players[index].playerName}"),
+                            subtitle: Text("\t${players[index].money}"),
+                            tileColor: (appEngine.myName == players[index].playerName) ?
+                              Colors.lightBlueAccent : ((index % 2) == 1)?Colors.grey[300]:Colors.transparent,
+                          );
+                        }
+                    );
+                  }
+                },
+              );
+            }
           )
         )
       ),

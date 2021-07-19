@@ -7,7 +7,6 @@ import 'package:sudoku_crypto/src/resources/communications.dart';
   sending data using the packet handler class:
   test.send
 */
-import 'dart:convert';
 import 'dart:io';
 
 //Main class that will be globally accessible
@@ -28,6 +27,7 @@ class AppEngine {
   //To hold all the database data
   SudokuDatabase database = SudokuDatabase();
   //To hold the user's solution of the database
+  int databaseLatestID = 0;
   Sudoku _currentSudoku = Sudoku(sudokuID: 0, grid: testGrid);
   set currentSudoku (Sudoku s){
     _currentSudoku = s;
@@ -46,57 +46,84 @@ class AppEngine {
   //To update the UI when the database changes
   DatabaseStateBLoC databaseStateBLoC = DatabaseStateBLoC();
   //To communicate with the server
-  //TODO: Make the communications class with all the required function members
   PacketHandler comms = PacketHandler(destIpString: "192.168.4.1", portNumber: 50000);
+
+
   void onData(RawSocketEvent event) async {
     // and event handler for when a packet is received
     print("socket event");
     if (event == RawSocketEvent.read) {
       Datagram? rcv = comms.socketConnection.receive();
-      List<int> data = [];
-      for (int i = 0; i < rcv!.data.length; i++){
+      List<int> data = rcv!.data;
+      /*for (int i = 0; i < rcv!.data.length; i++){
         if (rcv.data[i] < 127) data.add(rcv.data[i]);
-      }
-      print("Received data: " + ascii.decode(data));
-      PacketSplitter pcktReceived = PacketSplitter(ascii.decode(data));
+      }*/
+      print("Received data: $data");
+      PacketSplitter pcktReceived = PacketSplitter(data);
       if (pcktReceived.type == "0") {
         //the MCU is updating the sudoku
-        //TODO CONFIRM SUDOKUS ARE THE SAME ; ACCESS A STRING REPRESENTATIOON OF THE SUDOKU
+        //CONFIRM SUDOKUS ARE THE SAME
         //RECEIVED USING COMMAND pcktReceived.sudoku;
-        if (problemSudoku.sudokuID != pcktReceived.sudoku.hashCode) {
+        if (problemSudoku.sudokuID != pcktReceived.sudokuID) {
           problemSudoku = Sudoku(
-              sudokuID: pcktReceived.sudoku.hashCode,
+              sudokuID: pcktReceived.sudokuID,
               grid: pcktReceived.sudokuTable
           );
           currentSudoku = Sudoku(
-              sudokuID: pcktReceived.sudoku.hashCode,
+              sudokuID: pcktReceived.sudokuID,
               grid: pcktReceived.sudokuTable
           );
         }
+
+        Future<void> makeRequests () async {
+          if (pcktReceived.sudokuID != (databaseLatestID + 1)) {
+            for (int i = (databaseLatestID + 1); i < pcktReceived.sudokuID; i++) {
+              comms.broadcastRequestDbEntry(i);
+              await Future.delayed(Duration(milliseconds: 200));
+            }
+          }
+          List<int> missedLogs = await database.missedLogs();
+          for (int i = 0; i < missedLogs.length; i++) {
+            comms.broadcastRequestDbEntry(missedLogs[i]);
+            await Future.delayed(Duration(milliseconds: 200));
+          }
+        }
+        makeRequests();
       }
       else if (pcktReceived.type == "2") {
         //someone has completed the sudoku and won
-        //TODO Update the database
+        //Update the database
         //access the person who solved with pcktReceived.solver the old sudoku id is pckreceive.id
         await database.updateDatabase(
-            pcktReceived.sudoku.hashCode, pcktReceived.solver
+            pcktReceived.sudokuID, pcktReceived.solver
         );
         databaseStateBLoC.newDatabaseEntry();
-
-        List<Player> players = await database.players();
-        print ("Player's database: " + players.toString());
-
-        List<Log> logs = await database.logs();
-        print ("Log's database: " + logs.toString());
+        databaseLatestID = await database.latestLog();
       }
       else if (pcktReceived.type == "3") {
         this.problemSudoku = Sudoku(
-            sudokuID: pcktReceived.sudoku.hashCode, grid: pcktReceived.sudokuTable
+            sudokuID: pcktReceived.sudokuID, grid: pcktReceived.sudokuTable
         );
         this.currentSudoku = Sudoku(
-            sudokuID: pcktReceived.sudoku.hashCode, grid: pcktReceived.sudokuTable
+            sudokuID: pcktReceived.sudokuID, grid: pcktReceived.sudokuTable
         );
       }
+      else if (pcktReceived.type == "4") {
+        //Database entry for synchronizing databases
+        await database.updateDatabase(
+            pcktReceived.sudokuID, pcktReceived.solver
+        );
+        databaseStateBLoC.newDatabaseEntry();
+        databaseLatestID = await database.latestLog();
+      }
+      else if (pcktReceived.type == "5") {
+        //Database entry request
+        Log? log = await database.getLog(pcktReceived.sudokuID);
+        if ((log != null) && (log.playerWhoSolved != "::Missed::")){
+          comms.sendDbEntry(log.sudokuID, log.playerWhoSolved, rcv.address, rcv.port);
+        }
+      }
+      //Any other type?
     }
   }
 
@@ -121,13 +148,7 @@ class AppEngine {
     await comms.initializeIp();
     comms.socketConnection.listen(onData);
     await database.initializeDatabase();
-  }
-
-  String encapsulateData() {
-    //encapsulate data to send
-    String pckt = "";
-    pckt = "1" + currentSudoku.toString() + myName;
-    return pckt;
+    databaseLatestID = await database.latestLog();
   }
 
   void setNumber(int number) {
@@ -148,9 +169,7 @@ class AppEngine {
   bool check_SudokuCorrectness() {
     //TODO: Write code for checking if complete sudoku is correct
     if (currentSudoku.checkSudokuCorrectness()) {
-      String pckt = encapsulateData();
-      print("Packet to send: $pckt");
-      comms.sendData(pckt);
+      comms.sendCompletedSudoku(currentSudoku.sudokuID, currentSudoku.toString(), myName);
       return true;
     }
     return false;

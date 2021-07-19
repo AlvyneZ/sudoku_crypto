@@ -24,10 +24,11 @@ class SudokuDatabase {
     player.add(Player(playerName: "Fao"));
     player.add(Player(playerName: "Peris"));
     player.add(Player(playerName: "Gicheru"));
-    player.add(Player(playerName: "Fiona"));
+    player.add(Player(playerName: "Kembo"));
     player.add(Player(playerName: "Elisha"));
     player.add(Player(playerName: "Gibson"));
     player.add(Player(playerName: "Ngugi"));
+    player.add(Player(playerName: "::Missed::"));
 
     database = openDatabase(
       join(await getDatabasesPath(), 'sudoku_crypto.db'),
@@ -38,7 +39,7 @@ class SudokuDatabase {
         await db.execute(
           'CREATE TABLE logs(sudokuID INTEGER PRIMARY KEY, playerWhoSolved VARCHAR[50], moneyAwarded INTEGER, CONSTRAINT fk_player  FOREIGN KEY (playerWhoSolved) REFERENCES players(playerName))',
         );
-        for (int i = 0; i < 19; i++){
+        for (int i = 0; i < player.length; i++){
           insertPlayer(player[i]);
         }
       },
@@ -79,7 +80,7 @@ class SudokuDatabase {
     // Get a reference to the database.
     final db = await database;
 
-    // Query the table for all The Players.
+    // Query the table for the requested Player.
     final List<Map<String, dynamic>> maps = await db.query(
         'players',
         columns: ["playerName", "money"],
@@ -133,7 +134,7 @@ class SudokuDatabase {
     await db.insert(
       'logs',
       log.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      conflictAlgorithm: ConflictAlgorithm.abort,
     );
   }
 
@@ -152,6 +153,61 @@ class SudokuDatabase {
           playerWhoSolved: maps[i]['playerWhoSolved'],
           moneyAwarded: maps[i]['moneyAwarded']
       );
+    });
+  }
+
+  // A method that retrieves a log from the logs table.
+  Future<Log?> getLog(int sudokuID) async {
+    // Get a reference to the database.
+    final db = await database;
+
+    // Query the table for the requested Log.
+    final List<Map<String, dynamic>> maps = await db.query(
+        'logs',
+        columns: ["sudokuID", "playerWhoSolved", "moneyAwarded"],
+        where: 'sudokuID = ?',
+        whereArgs: [sudokuID]
+    );
+
+    // Convert the first element of List<Map<String, dynamic> into a Player.
+    if (maps.length > 0){
+      return Log(
+          sudokuID: maps[0]['sudokuID'],
+          playerWhoSolved: maps[0]['playerWhoSolved'],
+          moneyAwarded: maps[0]['moneyAwarded']
+      );
+    }
+    return null;
+  }
+
+  Future<int> latestLog() async {
+    List<Log> logsData = await logs();
+    if (logsData.length == 0)
+      return 0;
+    int latestLogID = logsData[0].sudokuID;
+    for (Log l in logsData){
+      if (l.sudokuID > latestLogID){
+        latestLogID = l.sudokuID;
+      }
+    }
+    return latestLogID;
+  }
+
+  Future<List<int>> missedLogs() async {
+    // Get a reference to the database.
+    final db = await database;
+
+    // Query the table for the requested Logs.
+    final List<Map<String, dynamic>> maps = await db.query(
+        'logs',
+        columns: ["sudokuID", "playerWhoSolved", "moneyAwarded"],
+        where: 'playerWhoSolved = ?',
+        whereArgs: ["::Missed::"]
+    );
+
+    // Convert the List<Map<String, dynamic> into a List<Log>.
+    return List.generate(maps.length, (i) {
+      return maps[i]['sudokuID'];
     });
   }
 
@@ -174,14 +230,17 @@ class SudokuDatabase {
     // Get a reference to the database.
     final db = await database;
 
-    // Remove the log from the database.
-    await db.delete(
-      'logs',
-      // Use a `where` clause to delete a specific log.
-      where: 'sudokuID = ?',
-      // Pass the log's sudokuID as a whereArg to prevent SQL injection.
-      whereArgs: [sudokuID],
-    );
+    // Remove the log from the database if it exists.
+    Log? logToDelete = await getLog(sudokuID);
+    if (logToDelete != null) {
+      await db.delete(
+        'logs',
+        // Use a `where` clause to delete a specific log.
+        where: 'sudokuID = ?',
+        // Pass the log's sudokuID as a whereArg to prevent SQL injection.
+        whereArgs: [sudokuID],
+      );
+    }
   }
 
   Future<void> updateDatabase (int sudokuID, String playerName) async {
@@ -193,10 +252,51 @@ class SudokuDatabase {
     }
     playerToUpdate.money += moneyPerSudoku;
 
-    await updatePlayer(playerToUpdate);
+    int latestSudokuID = await latestLog();
 
-    Log newLog = Log(sudokuID: sudokuID, playerWhoSolved: playerName, moneyAwarded: moneyPerSudoku);
-    await insertLog(newLog);
+    try {
+      Log newLog = Log(sudokuID: sudokuID, playerWhoSolved: playerName, moneyAwarded: moneyPerSudoku);
+      if (sudokuID < latestSudokuID) {
+        //Potentially missed log has been received
+        Log? missedLog = await getLog(sudokuID);
+        if ((missedLog == null) || (missedLog.playerWhoSolved == "::Missed::")) {
+          //The log must have been previously recorded as a missed log or is missing
+          await updateLog(newLog);
+          //Decrementing ::Missed:: player's money to show that there is one less missed log
+          Player? missing = await getPlayer("::Missed::");
+          if (missing != null) {
+            missing.money -= 1;
+            await updatePlayer(missing);
+          }
+        }
+      }
+      else if (sudokuID > (latestSudokuID + 1)) {
+        //Some logs have been missed
+        for (int i = (latestSudokuID+1); i < sudokuID; i++){
+          //inserting the new missed logs and marking them as missed by linking to ::Missed::
+          Log missedLog = Log(sudokuID: i, playerWhoSolved: "::Missed::", moneyAwarded: 1);
+          await insertLog(missedLog);
+        }
+        //Incrementing ::Missed:: player's money to show that there are missed logs
+        Player? missing = await getPlayer("::Missed::");
+        if (missing != null) {
+          missing.money += sudokuID - (latestSudokuID+1);
+          await updatePlayer(missing);
+        }
+        //Finally insert the new log
+        await insertLog(newLog);
+      }
+      else
+        await insertLog(newLog);
+
+      await updatePlayer(playerToUpdate);
+    }
+    catch(e){ }
+
+    List<Player> allPlayers = await players();
+    print ("Players: ${allPlayers.toString()}");
+    List<Log> allLogs = await logs();
+    print ("Logs: ${allLogs.toString()}");
   }
 }
 

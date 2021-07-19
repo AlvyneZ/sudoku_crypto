@@ -4,7 +4,7 @@ class DatabaseStateBLoC {
 
   //When a new database entry is received, an arbitrary int can be pushed into
   //  this stream controller to tell the UI to update
-  final StreamController<int> _databaseStateController = StreamController<int>();
+  final StreamController<int> _databaseStateController = StreamController<int>.broadcast();
 
   //UI elements will listen to the stream to know when the database state has changed
   late Stream<int> outDatabase;
